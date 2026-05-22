@@ -1,0 +1,6 @@
+file_path,file_name,extension,modality,status,processed_at,row_count,column_count,null_count,columns,file_size_bytes,error,line_count,word_count,char_count,channels,sample_rate_hz,duration_seconds,bit_depth,audio_format,width_pixels,height_pixels,aspect_ratio,image_format,color_mode
+C:\Users\USER\Documents\projects\learning\antigravity_learning_project\sample_dataset\data.csv,data.csv,.csv,structured_text,SUCCESS,2026-05-22T16:43:40.894432,3.0,4.0,1.0,"['id', 'name', 'score', 'is_active']",79,,,,,,,,,,,,,,
+C:\Users\USER\Documents\projects\learning\antigravity_learning_project\sample_dataset\doc.pdf,doc.pdf,.pdf,unknown,UNSUPPORTED,2026-05-22T16:43:40.894613,,,,,21,Unsupported file format / unknown modality,,,,,,,,,,,,,
+C:\Users\USER\Documents\projects\learning\antigravity_learning_project\sample_dataset\info.txt,info.txt,.txt,structured_text,SUCCESS,2026-05-22T16:43:40.914166,,,,,70,,3.0,13.0,68.0,,,,,,,,,,
+C:\Users\USER\Documents\projects\learning\antigravity_learning_project\sample_dataset\nested_folder\audio.wav,audio.wav,.wav,audio,SUCCESS,2026-05-22T16:43:40.933831,,,,,11068,,,,,1.0,22050.0,0.25,16.0,WAV,,,,,
+C:\Users\USER\Documents\projects\learning\antigravity_learning_project\sample_dataset\nested_folder\image.png,image.png,.png,image,SUCCESS,2026-05-22T16:43:40.973735,,,,,1948,,,,,,,,,,640.0,480.0,1.333,PNG,RGB
