@@ -1,4 +1,5 @@
 import os
+import queue
 import sys
 from typing import Any
 from src.domain.interfaces import Observer
@@ -24,3 +25,11 @@ class ConsoleProgressObserver(Observer):
             total = data.get("total", 0)
             reports_count = data.get("reports_count", 0)
             print(f"\n\n[+] Scan finished. Processed {reports_count}/{total} files.\n")
+
+class QueueProgressObserver(Observer):
+    def __init__(self) -> None:
+        self.q = queue.Queue()
+
+    def update(self, event_type: str, data: Any) -> None:
+        self.q.put({"event": event_type, "data": data})
+

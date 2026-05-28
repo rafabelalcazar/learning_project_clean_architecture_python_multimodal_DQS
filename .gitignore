@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local outputs
+scan_results.csv
+sample_dataset/
+
+# Editors
+.vscode/
+.idea/

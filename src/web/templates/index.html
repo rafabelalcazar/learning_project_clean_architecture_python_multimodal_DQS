@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unimodal Quality Analyzer Dashboard</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="glow-bg"></div>
+    <div class="app-container">
+        
+        <header class="app-header">
+            <h1>Unimodal Data Quality Analyzer</h1>
+            <p class="subtitle">Clean Architecture & Real-Time Observer Scanner</p>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Left Panel: Controls & Progress -->
+            <section class="glass-card panel-controls">
+                <h2>Configure Scan</h2>
+                <div class="input-group">
+                    <label for="dataset-path">Dataset Directory Path</label>
+                    <input type="text" id="dataset-path" placeholder="e.g. C:\Users\USER\dataset" autocomplete="off">
+                </div>
+                <div class="button-group">
+                    <button id="btn-scan" class="btn btn-primary">Start Scan</button>
+                    <a id="btn-download" href="/api/download" class="btn btn-secondary disabled" download>Download CSV Report</a>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="progress-section" id="progress-container">
+                    <div class="progress-info">
+                        <span id="progress-status">Idle</span>
+                        <span id="progress-percentage">0%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progress-bar"></div>
+                    </div>
+                    <p class="current-file" id="current-file-text">Ready to scan dataset</p>
+                </div>
+            </section>
+
+            <!-- Right Panel: Modality Counters -->
+            <section class="panel-statistics">
+                <div class="stats-grid">
+                    <!-- Text Stats -->
+                    <div class="glass-card stat-card card-text">
+                        <div class="stat-icon">📄</div>
+                        <div class="stat-content">
+                            <h3>Structured Text</h3>
+                            <p class="stat-count" id="count-text">0</p>
+                            <span class="stat-desc">csv, txt, xlsx</span>
+                        </div>
+                    </div>
+
+                    <!-- Image Stats -->
+                    <div class="glass-card stat-card card-image">
+                        <div class="stat-icon">🖼️</div>
+                        <div class="stat-content">
+                            <h3>Images</h3>
+                            <p class="stat-count" id="count-image">0</p>
+                            <span class="stat-desc">jpg, jpeg, png</span>
+                        </div>
+                    </div>
+
+                    <!-- Audio Stats -->
+                    <div class="glass-card stat-card card-audio">
+                        <div class="stat-icon">🎵</div>
+                        <div class="stat-content">
+                            <h3>Audio Tracks</h3>
+                            <p class="stat-count" id="count-audio">0</p>
+                            <span class="stat-desc">mp3, wav, mo3</span>
+                        </div>
+                    </div>
+
+                    <!-- Unknown Stats -->
+                    <div class="glass-card stat-card card-unknown">
+                        <div class="stat-icon">❓</div>
+                        <div class="stat-content">
+                            <h3>Other / Unknown</h3>
+                            <p class="stat-count" id="count-unknown">0</p>
+                            <span class="stat-desc">unsupported files</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Section: Live Log Console -->
+            <section class="glass-card panel-console">
+                <div class="console-header">
+                    <h2>Live Scan Log</h2>
+                    <span class="pulse-indicator" id="scan-indicator"></span>
+                </div>
+                <div class="console-log" id="console-output">
+                    <div class="log-line system-msg">[System] Waiting for input path...</div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>Built with Python, Flask & Clean Architecture principles</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
