@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnImportThresholds = document.getElementById('btn-import-thresholds');
     const importThresholdsInput = document.getElementById('import-thresholds-input');
     const thresholdIoStatus = document.getElementById('threshold-io-status');
+    const btnExportReport = document.getElementById('btn-export-report');
 
     let eventSource = null;
     let allResults = [];
@@ -92,7 +93,14 @@ document.addEventListener('DOMContentLoaded', () => {
         sample_rate_hz: 'Audio sample rate in Hz.',
         duration_seconds: 'Total audio duration in seconds.',
         bit_depth: 'Bits per audio sample.',
-        bitrate_kbps: 'Audio bitrate in kbps.'
+        bitrate_kbps: 'Audio bitrate in kbps.',
+        rms_energy: 'RMS energy of the normalized waveform (0-1); average loudness of the audio.',
+        peak_amplitude: 'Maximum absolute amplitude (0-1). Values close to 1 indicate a risk of clipping.',
+        clipping_ratio: 'Proportion of samples touching the amplitude ceiling (>= 0.99); detects digital clipping distortion.',
+        silence_ratio: 'Proportion of near-silent samples (< 0.01); detects truncated recordings or excessive silence.',
+        dynamic_range_db: 'Difference in dB between peak and RMS amplitude; the real dynamic range used by the recording.',
+        zero_crossing_rate: 'Rate of sign changes in the waveform; a cheap indicator of noise vs. tonal/percussive content.',
+        spectral_centroid_hz: 'Spectral "brightness": the magnitude-weighted average frequency of the signal (via FFT).'
     };
 
     const MODALITY_LABELS = {
@@ -870,6 +878,227 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         reader.readAsText(file);
         importThresholdsInput.value = '';
+    });
+
+    // ===== Full report export (thresholds + all charts + table, as one HTML file) =====
+
+    // Escapes untrusted text (file names, error messages, column lists that come
+    // straight from scanned files) before it is concatenated into the report's HTML.
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value === null || value === undefined ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    function formatCellForExport(value) {
+        if (value === undefined || value === null || value === '') return '—';
+        if (Array.isArray(value)) return value.join(', ');
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3);
+        return String(value);
+    }
+
+    // Renders one histogram per numeric metric of every modality on off-screen
+    // canvases (never attached to the page) and captures each as a PNG data URL,
+    // so the exported report is fully self-contained and needs no Chart.js to view.
+    function generateAllChartImages() {
+        return new Promise((resolve) => {
+            const result = {};
+            const pending = [];
+
+            getAvailableModalities().forEach(modality => {
+                result[modality] = [];
+                const rows = allResults.filter(r => r.modality === modality);
+                const metrics = getNumericMetricKeys(rows);
+
+                metrics.forEach(metric => {
+                    const values = rows
+                        .map(r => r[metric])
+                        .filter(v => typeof v === 'number' && !Number.isNaN(v));
+                    if (values.length === 0) return;
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 480;
+                    canvas.height = 300;
+
+                    const { labels, counts } = computeHistogramBins(values);
+                    const chart = new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data: counts,
+                                backgroundColor: 'rgba(37, 99, 235, 0.75)',
+                                borderRadius: 4,
+                                maxBarThickness: 24
+                            }]
+                        },
+                        options: {
+                            responsive: false,
+                            animation: false,
+                            plugins: {
+                                legend: { display: false },
+                                title: { display: true, text: metric, color: '#111827', font: { size: 13, weight: 'bold' } }
+                            },
+                            scales: {
+                                x: { ticks: { color: '#374151', font: { size: 9 }, maxRotation: 45 }, grid: { color: '#e5e7eb' } },
+                                y: { beginAtZero: true, ticks: { color: '#374151', precision: 0 }, grid: { color: '#e5e7eb' } }
+                            }
+                        }
+                    });
+
+                    pending.push({ modality, metric, chart });
+                });
+            });
+
+            // Chart.js schedules its first paint on an animation frame even with
+            // animation disabled; wait two frames so every canvas has pixels
+            // before reading them back with toBase64Image().
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    pending.forEach(({ modality, metric, chart }) => {
+                        result[modality].push({ metric, dataUrl: chart.toBase64Image() });
+                        chart.destroy();
+                    });
+                    resolve(result);
+                });
+            });
+        });
+    }
+
+    function buildThresholdsReportHtml() {
+        const sections = getAvailableModalities().map(modality => {
+            const cfg = thresholds[modality] || {};
+            const activeRows = Object.entries(cfg).filter(([, bound]) => bound.minEnabled || bound.maxEnabled);
+            if (activeRows.length === 0) return '';
+
+            const rowsHtml = activeRows.map(([metric, bound]) => `
+                <tr>
+                    <td>${escapeHtml(metric)}</td>
+                    <td>${bound.minEnabled ? escapeHtml(formatThresholdValue(bound.min)) : '—'}</td>
+                    <td>${bound.maxEnabled ? escapeHtml(formatThresholdValue(bound.max)) : '—'}</td>
+                </tr>`).join('');
+
+            return `<h3>${escapeHtml(MODALITY_LABELS[modality] || modality)}</h3>
+                <table><thead><tr><th>Metric</th><th>Min</th><th>Max</th></tr></thead>
+                <tbody>${rowsHtml}</tbody></table>`;
+        }).filter(Boolean).join('');
+
+        return `<h2>Quality Thresholds</h2>${sections || '<p>No thresholds were configured for this report.</p>'}`;
+    }
+
+    function buildChartsReportHtml(chartImages) {
+        const sections = getAvailableModalities().map(modality => {
+            const charts = chartImages[modality] || [];
+            if (charts.length === 0) return '';
+
+            const cards = charts.map(({ metric, dataUrl }) => `
+                <figure class="chart-card">
+                    <img src="${dataUrl}" alt="${escapeHtml(metric)} distribution">
+                    <figcaption>${escapeHtml(metric)}</figcaption>
+                </figure>`).join('');
+
+            return `<h3>${escapeHtml(MODALITY_LABELS[modality] || modality)}</h3><div class="chart-grid">${cards}</div>`;
+        }).filter(Boolean).join('');
+
+        return `<h2>Metric Distributions</h2>${sections || '<p>No numeric metrics available to plot.</p>'}`;
+    }
+
+    // Mirrors exactly what is currently on screen in the Metrics Table tab
+    // (same filters, sort and Quality column) so the export is WYSIWYG.
+    function buildTableReportHtml() {
+        const rows = getFilteredTableRows();
+        const dataColumns = getTableColumns(rows.length ? rows : allResults);
+        const fileNameIdx = dataColumns.indexOf('file_name');
+        const columns = fileNameIdx >= 0
+            ? [...dataColumns.slice(0, fileNameIdx + 1), 'quality', ...dataColumns.slice(fileNameIdx + 1)]
+            : ['quality', ...dataColumns];
+
+        const headerHtml = columns.map(col => `<th>${escapeHtml(col === 'quality' ? 'Quality' : col)}</th>`).join('');
+
+        const bodyHtml = rows.map(row => {
+            const cells = columns.map(col => {
+                if (col === 'quality') {
+                    const result = evaluateThresholds(row);
+                    if (result === null) return '<td><span class="badge-na">—</span></td>';
+                    return result.pass
+                        ? '<td><span class="badge-pass">✅ Pass</span></td>'
+                        : `<td><span class="badge-fail" title="${escapeHtml(result.violations.join(', '))}">❌ Fail</span></td>`;
+                }
+                return `<td>${escapeHtml(formatCellForExport(row[col]))}</td>`;
+            }).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+
+        return `<h2>Metrics Table</h2>
+            <p class="report-meta">${rows.length} of ${allResults.length} files (reflecting the filters active at export time).</p>
+            <div class="table-wrapper"><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+    }
+
+    const REPORT_STYLES = `
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f7f8fa; color:#1a1a2e; margin:0; padding:2rem; }
+        h1 { font-size:1.8rem; margin-bottom:0.25rem; }
+        .report-meta { color:#666; font-size:0.9rem; }
+        h2 { margin-top:2.5rem; border-bottom:2px solid #2563eb; padding-bottom:0.4rem; }
+        h3 { margin-top:1.5rem; color:#2563eb; }
+        table { border-collapse:collapse; width:100%; margin-top:1rem; font-size:0.85rem; }
+        th, td { border:1px solid #ddd; padding:0.5rem 0.75rem; text-align:left; }
+        th { background:#eef1f7; }
+        .table-wrapper { overflow-x:auto; }
+        .chart-grid { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; }
+        .chart-card { border:1px solid #ddd; border-radius:8px; padding:0.75rem; background:#fff; margin:0; }
+        .chart-card img { display:block; max-width:480px; width:100%; }
+        .chart-card figcaption { font-size:0.8rem; color:#555; margin-top:0.4rem; text-align:center; }
+        .badge-pass { color:#0a8a3f; font-weight:600; }
+        .badge-fail { color:#c0392b; font-weight:600; cursor:help; }
+        .badge-na { color:#888; }
+    `;
+
+    async function buildFullReportHtml() {
+        const chartImages = await generateAllChartImages();
+
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Data Quality Report</title>
+<style>${REPORT_STYLES}</style>
+</head>
+<body>
+<h1>Unimodal Data Quality Report</h1>
+<p class="report-meta">Generated ${escapeHtml(new Date().toLocaleString())} — ${allResults.length} files analyzed.</p>
+${buildThresholdsReportHtml()}
+${buildChartsReportHtml(chartImages)}
+${buildTableReportHtml()}
+</body>
+</html>`;
+    }
+
+    btnExportReport.addEventListener('click', async () => {
+        btnExportReport.disabled = true;
+        const originalLabel = btnExportReport.textContent;
+        btnExportReport.textContent = '⏳ Generating...';
+
+        try {
+            const html = await buildFullReportHtml();
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            link.href = url;
+            link.download = `dqa-report-${timestamp}.html`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            setIoStatus('Full report exported.');
+        } catch (err) {
+            console.error('Failed to export full report:', err);
+            setIoStatus('Failed to export the full report.');
+        } finally {
+            btnExportReport.disabled = false;
+            btnExportReport.textContent = originalLabel;
+        }
     });
 
     // Rebuilds the threshold config from scratch using the current report's
