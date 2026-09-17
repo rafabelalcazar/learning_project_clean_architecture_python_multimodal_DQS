@@ -25,7 +25,10 @@
                 <h2>Configure Scan</h2>
                 <div class="input-group">
                     <label for="dataset-path">Dataset Directory Path</label>
-                    <input type="text" id="dataset-path" placeholder="e.g. C:\Users\USER\dataset" autocomplete="off">
+                    <div class="input-row">
+                        <input type="text" id="dataset-path" placeholder="e.g. C:\Users\USER\dataset" autocomplete="off">
+                        <button type="button" id="btn-browse" class="btn-browse" title="Browse for a folder">📁</button>
+                    </div>
                 </div>
                 <div class="button-group">
                     <button id="btn-scan" class="btn btn-primary">Start Scan</button>

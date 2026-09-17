@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputPath = document.getElementById('dataset-path');
     const btnScan = document.getElementById('btn-scan');
     const btnDownload = document.getElementById('btn-download');
+    const btnBrowse = document.getElementById('btn-browse');
     
     const progressContainer = document.getElementById('progress-container');
     const progressStatus = document.getElementById('progress-status');
@@ -71,6 +72,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // Auto-scroll to bottom
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
+
+    // Browse for a directory using the native OS file explorer
+    btnBrowse.addEventListener('click', async () => {
+        btnBrowse.disabled = true;
+        try {
+            const response = await fetch('/api/browse-directory');
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+            } else if (data.path) {
+                inputPath.value = data.path;
+            }
+        } catch (err) {
+            console.error('Browse error:', err);
+            alert('Failed to open the folder picker.');
+        } finally {
+            btnBrowse.disabled = false;
+        }
+    });
 
     // Main Scan Execution
     btnScan.addEventListener('click', () => {

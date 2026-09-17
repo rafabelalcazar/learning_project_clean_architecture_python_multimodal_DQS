@@ -2,7 +2,7 @@ import json
 import os
 import queue
 import threading
-from flask import Blueprint, Response, request, render_template, send_file
+from flask import Blueprint, Response, request, render_template, send_file, jsonify
 from src.domain.interfaces import FileScanner, MetricsExporter, ModalityClassifier
 from src.use_cases.scan_dataset import ScanDatasetUseCase
 from src.use_cases.factory import AbstractProcessorFactory
@@ -32,6 +32,22 @@ def init_app_dependencies(scanner: FileScanner, factory: AbstractProcessorFactor
 @web_bp.route('/')
 def index():
     return render_template('index.html')
+
+@web_bp.route('/api/browse-directory')
+def browse_directory():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return jsonify({'error': 'Native folder picker is not available on this system.'}), 500
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    selected_path = filedialog.askdirectory()
+    root.destroy()
+
+    return jsonify({'path': selected_path})
 
 @web_bp.route('/api/scan')
 def scan():

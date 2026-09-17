@@ -150,6 +150,37 @@ body {
     box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
 }
 
+.input-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-row input {
+    flex: 1;
+}
+
+.btn-browse {
+    flex-shrink: 0;
+    width: 44px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-browse:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--color-primary);
+}
+
+.btn-browse:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* Button Styles */
 .button-group {
     display: flex;
