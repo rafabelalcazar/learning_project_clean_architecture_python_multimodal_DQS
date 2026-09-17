@@ -108,70 +108,94 @@
             <section class="glass-card panel-results" id="results-section" hidden>
                 <div class="results-header">
                     <h2>Scan Results Analysis</h2>
+                </div>
+
+                <!-- Moved into the Thresholds modal's main area while it is open -->
+                <div id="results-view">
                     <div class="tabs" role="tablist">
                         <button type="button" class="tab-btn active" data-tab="tab-histogram" role="tab" aria-selected="true">📊 Distribution</button>
                         <button type="button" class="tab-btn" data-tab="tab-table" role="tab" aria-selected="false">📋 Metrics Table</button>
-                        <button type="button" class="tab-btn" data-tab="tab-thresholds" role="tab" aria-selected="false">🎚️ Thresholds</button>
+                    </div>
+
+                    <!-- Tab 1: Histogram of numeric metric distribution -->
+                    <div class="tab-content active" id="tab-histogram" role="tabpanel">
+                        <div class="filter-row">
+                            <div class="control-group">
+                                <label for="histogram-modality">Modality</label>
+                                <select id="histogram-modality"></select>
+                            </div>
+                            <div class="control-group">
+                                <label for="histogram-metric">Metric</label>
+                                <select id="histogram-metric"></select>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="histogram-chart"></canvas>
+                        </div>
+                        <p class="empty-msg" id="histogram-empty-msg" hidden>No numeric values available to plot for this selection.</p>
+                    </div>
+
+                    <!-- Tab 2: Interactive, filterable metrics table -->
+                    <div class="tab-content" id="tab-table" role="tabpanel" hidden>
+                        <div class="filter-row">
+                            <div class="control-group control-group-grow">
+                                <label for="table-search">Search by file name</label>
+                                <input type="text" id="table-search" placeholder="e.g. photo_01.png" autocomplete="off">
+                            </div>
+                            <div class="control-group">
+                                <label for="table-modality">Modality</label>
+                                <select id="table-modality"></select>
+                            </div>
+                        </div>
+                        <div class="table-scroll-wrapper">
+                            <table id="results-table">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="empty-msg" id="table-empty-msg" hidden>No rows match the current filters.</p>
+                        <p class="table-row-count" id="table-row-count"></p>
                     </div>
                 </div>
 
-                <!-- Tab 1: Histogram of numeric metric distribution -->
-                <div class="tab-content active" id="tab-histogram" role="tabpanel">
-                    <div class="filter-row">
-                        <div class="control-group">
-                            <label for="histogram-modality">Modality</label>
-                            <select id="histogram-modality"></select>
-                        </div>
-                        <div class="control-group">
-                            <label for="histogram-metric">Metric</label>
-                            <select id="histogram-metric"></select>
-                        </div>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="histogram-chart"></canvas>
-                    </div>
-                    <p class="empty-msg" id="histogram-empty-msg" hidden>No numeric values available to plot for this selection.</p>
-                </div>
-
-                <!-- Tab 2: Interactive, filterable metrics table -->
-                <div class="tab-content" id="tab-table" role="tabpanel" hidden>
-                    <div class="filter-row">
-                        <div class="control-group control-group-grow">
-                            <label for="table-search">Search by file name</label>
-                            <input type="text" id="table-search" placeholder="e.g. photo_01.png" autocomplete="off">
-                        </div>
-                        <div class="control-group">
-                            <label for="table-modality">Modality</label>
-                            <select id="table-modality"></select>
-                        </div>
-                    </div>
-                    <div class="table-scroll-wrapper">
-                        <table id="results-table">
-                            <thead></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                    <p class="empty-msg" id="table-empty-msg" hidden>No rows match the current filters.</p>
-                    <p class="table-row-count" id="table-row-count"></p>
-                </div>
-
-                <!-- Tab 3: Per-metric quality thresholds -->
-                <div class="tab-content" id="tab-thresholds" role="tabpanel" hidden>
-                    <div class="filter-row">
-                        <div class="control-group">
-                            <label for="thresholds-modality">Modality</label>
-                            <select id="thresholds-modality"></select>
-                        </div>
-                    </div>
-                    <p class="threshold-summary" id="threshold-summary"></p>
-                    <div class="threshold-list" id="threshold-list"></div>
-                </div>
+                <button type="button" class="btn btn-secondary btn-configure-thresholds" id="btn-configure-thresholds">🎚️ Configurar Thresholds</button>
             </section>
         </main>
 
         <footer class="app-footer">
             <p>Built with Python, Flask & Clean Architecture principles</p>
         </footer>
+    </div>
+
+    <!-- Thresholds configuration modal -->
+    <div class="modal-overlay" id="thresholds-modal" hidden>
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="thresholds-modal-title">
+            <div class="modal-header">
+                <h2 id="thresholds-modal-title">Configurar Thresholds</h2>
+                <button type="button" class="modal-close-btn" id="btn-close-thresholds-modal" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <aside class="modal-sidebar">
+                    <div class="control-group">
+                        <label for="thresholds-modality">Modality</label>
+                        <select id="thresholds-modality"></select>
+                    </div>
+                    <p class="threshold-summary" id="threshold-summary"></p>
+                    <div class="threshold-list" id="threshold-list"></div>
+
+                    <div class="threshold-sidebar-actions">
+                        <button type="button" class="btn btn-primary" id="btn-save-thresholds">💾 Save</button>
+                        <div class="threshold-io-actions">
+                            <button type="button" class="btn btn-secondary" id="btn-export-thresholds">⬇️ Export</button>
+                            <button type="button" class="btn btn-secondary" id="btn-import-thresholds">⬆️ Import</button>
+                        </div>
+                        <input type="file" id="import-thresholds-input" accept="application/json" hidden>
+                        <p class="threshold-io-status" id="threshold-io-status"></p>
+                    </div>
+                </aside>
+                <div class="modal-main" id="modal-main-slot"></div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>

@@ -41,6 +41,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const thresholdSummary = document.getElementById('threshold-summary');
     const thresholdList = document.getElementById('threshold-list');
 
+    // Thresholds modal elements
+    const resultsView = document.getElementById('results-view');
+    const btnConfigureThresholds = document.getElementById('btn-configure-thresholds');
+    const thresholdsModal = document.getElementById('thresholds-modal');
+    const modalMainSlot = document.getElementById('modal-main-slot');
+    const btnCloseThresholdsModal = document.getElementById('btn-close-thresholds-modal');
+    const btnSaveThresholds = document.getElementById('btn-save-thresholds');
+    const btnExportThresholds = document.getElementById('btn-export-thresholds');
+    const btnImportThresholds = document.getElementById('btn-import-thresholds');
+    const importThresholdsInput = document.getElementById('import-thresholds-input');
+    const thresholdIoStatus = document.getElementById('threshold-io-status');
+
     let eventSource = null;
     let allResults = [];
     let histogramChart = null;
@@ -126,6 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDownload.setAttribute('tabindex', '-1'); // Disable focus
 
         scanIndicator.classList.add('active');
+
+        // Close the thresholds modal if it was left open from a previous scan
+        if (!thresholdsModal.hidden) {
+            closeThresholdsModal();
+        }
 
         // Hide stale analysis results until the new scan finishes
         resultsSection.hidden = true;
@@ -313,6 +330,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ===== Thresholds modal: open/close =====
+    // The charts/table live permanently under #results-view; opening the modal
+    // simply relocates that DOM node into the modal's main area (no duplication,
+    // no second Chart.js instance), and closing it moves it back in place.
+    function openThresholdsModal() {
+        modalMainSlot.appendChild(resultsView);
+        thresholdsModal.hidden = false;
+        document.body.classList.add('modal-open');
+
+        renderThresholdsTab();
+        renderThresholdSummary();
+
+        requestAnimationFrame(() => {
+            if (histogramChart) histogramChart.resize();
+        });
+        btnCloseThresholdsModal.focus();
+    }
+
+    function closeThresholdsModal() {
+        resultsSection.insertBefore(resultsView, btnConfigureThresholds);
+        thresholdsModal.hidden = true;
+        document.body.classList.remove('modal-open');
+
+        requestAnimationFrame(() => {
+            if (histogramChart) histogramChart.resize();
+        });
+    }
+
+    btnConfigureThresholds.addEventListener('click', openThresholdsModal);
+    btnCloseThresholdsModal.addEventListener('click', closeThresholdsModal);
+
+    thresholdsModal.addEventListener('click', (event) => {
+        if (event.target === thresholdsModal) closeThresholdsModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !thresholdsModal.hidden) closeThresholdsModal();
+    });
+
     // ===== Results Analysis: fetch & populate =====
     async function loadResults() {
         try {
@@ -331,6 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderHistogram();
             renderTable();
 
+            populateThresholdsModalitySelect();
             buildThresholdRanges();
             renderThresholdsTab();
             renderThresholdSummary();
@@ -370,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateModalitySelects() {
         const modalities = getAvailableModalities();
 
-        [histogramModalitySelect, tableModalitySelect, thresholdsModalitySelect].forEach(select => {
+        [histogramModalitySelect, tableModalitySelect].forEach(select => {
             const previousValue = select.value;
             select.innerHTML = '';
 
@@ -390,6 +447,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.value = previousValue;
             }
         });
+    }
+
+    // Thresholds are always scoped to one modality (metric sets differ per
+    // modality), so unlike the histogram/table filters there is no "All" option.
+    function populateThresholdsModalitySelect() {
+        const modalities = getAvailableModalities();
+        const previousValue = thresholdsModalitySelect.value;
+
+        thresholdsModalitySelect.innerHTML = '';
+        modalities.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = MODALITY_LABELS[m] || m;
+            thresholdsModalitySelect.appendChild(opt);
+        });
+
+        if (modalities.includes(previousValue)) {
+            thresholdsModalitySelect.value = previousValue;
+        }
     }
 
     function populateMetricSelect() {
@@ -685,8 +761,120 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number.isInteger(n) ? String(n) : n.toFixed(3);
     }
 
+    // ===== Threshold persistence: save / export / import =====
+    const THRESHOLDS_STORAGE_KEY = 'dqa_thresholds_config_v1';
+
+    // Only the user-set parts are persisted; dataMin/dataMax/step are always
+    // recomputed fresh from the current report.
+    function serializeThresholds() {
+        const serializable = {};
+        Object.entries(thresholds).forEach(([modality, metrics]) => {
+            serializable[modality] = {};
+            Object.entries(metrics).forEach(([metric, cfg]) => {
+                serializable[modality][metric] = {
+                    minEnabled: cfg.minEnabled,
+                    min: cfg.min,
+                    maxEnabled: cfg.maxEnabled,
+                    max: cfg.max
+                };
+            });
+        });
+        return serializable;
+    }
+
+    // Applies a previously saved/imported config onto the freshly-built
+    // `thresholds`, clamping bounds into the current report's observed range
+    // and skipping any modality/metric that no longer exists in this report.
+    function applySerializedThresholds(saved) {
+        if (!saved || typeof saved !== 'object') return;
+
+        Object.entries(saved).forEach(([modality, metrics]) => {
+            if (!thresholds[modality] || typeof metrics !== 'object' || metrics === null) return;
+
+            Object.entries(metrics).forEach(([metric, bound]) => {
+                const cfg = thresholds[modality][metric];
+                if (!cfg || !bound) return;
+
+                if (typeof bound.min === 'number') {
+                    cfg.min = Math.min(Math.max(bound.min, cfg.dataMin), cfg.dataMax);
+                }
+                if (typeof bound.max === 'number') {
+                    cfg.max = Math.min(Math.max(bound.max, cfg.dataMin), cfg.dataMax);
+                }
+                cfg.minEnabled = Boolean(bound.minEnabled);
+                cfg.maxEnabled = Boolean(bound.maxEnabled);
+            });
+        });
+    }
+
+    function loadThresholdsFromStorage() {
+        try {
+            const raw = localStorage.getItem(THRESHOLDS_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (err) {
+            console.error('Failed to read saved thresholds:', err);
+            return null;
+        }
+    }
+
+    function setIoStatus(message) {
+        thresholdIoStatus.textContent = message;
+        clearTimeout(setIoStatus._timeoutId);
+        setIoStatus._timeoutId = setTimeout(() => {
+            thresholdIoStatus.textContent = '';
+        }, 3000);
+    }
+
+    btnSaveThresholds.addEventListener('click', () => {
+        try {
+            localStorage.setItem(THRESHOLDS_STORAGE_KEY, JSON.stringify(serializeThresholds()));
+            setIoStatus('Thresholds saved for future scans.');
+        } catch (err) {
+            console.error('Failed to save thresholds:', err);
+            setIoStatus('Could not save thresholds in this browser.');
+        }
+    });
+
+    btnExportThresholds.addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(serializeThresholds(), null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'thresholds-config.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setIoStatus('Configuration exported.');
+    });
+
+    btnImportThresholds.addEventListener('click', () => importThresholdsInput.click());
+
+    importThresholdsInput.addEventListener('change', () => {
+        const file = importThresholdsInput.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result);
+                applySerializedThresholds(parsed);
+                renderThresholdsTab();
+                renderThresholdSummary();
+                renderTable();
+                setIoStatus('Configuration imported.');
+            } catch (err) {
+                console.error('Failed to import thresholds:', err);
+                setIoStatus('Invalid configuration file.');
+            }
+        };
+        reader.readAsText(file);
+        importThresholdsInput.value = '';
+    });
+
     // Rebuilds the threshold config from scratch using the current report's
-    // real min/max per metric, so ranges always reflect the latest scan.
+    // real min/max per metric, so ranges always reflect the latest scan, then
+    // reapplies any previously saved configuration (clamped to the new ranges).
     function buildThresholdRanges() {
         thresholds = {};
 
@@ -720,6 +908,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             thresholds[modality] = modalityThresholds;
         });
+
+        applySerializedThresholds(loadThresholdsFromStorage());
     }
 
     function evaluateThresholds(row) {
