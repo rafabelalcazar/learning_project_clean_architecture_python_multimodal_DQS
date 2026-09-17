@@ -6,24 +6,7 @@ from src.domain.interfaces import MetricsExporter
 
 class CsvMetricsExporter(MetricsExporter):
     def export(self, reports: List[QualityReport], output_path: str) -> None:
-        flat_data = []
-        for report in reports:
-            row = {
-                "file_path": report.file_item.path,
-                "file_name": report.file_item.name,
-                "extension": report.file_item.extension,
-                "modality": report.file_item.modality.value,
-                "status": report.status,
-                "processed_at": report.processed_at.isoformat()
-            }
-            
-            # Flatten metrics into columns
-            for key, val in report.metrics.items():
-                # Prevent colliding with base keys
-                column_name = key if key not in row else f"metric_{key}"
-                row[column_name] = val
-                
-            flat_data.append(row)
+        flat_data = [report.to_flat_dict() for report in reports]
 
         # Create DataFrame
         df = pd.DataFrame(flat_data)

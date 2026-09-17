@@ -21,6 +21,7 @@ factory_impl = None
 exporter_impl = None
 classifier_impl = None
 OUTPUT_CSV_PATH = "scan_results.csv"
+LAST_SCAN_RESULTS = []
 
 def init_app_dependencies(scanner: FileScanner, factory: AbstractProcessorFactory, exporter: MetricsExporter, classifier: ModalityClassifier) -> None:
     global scanner_impl, factory_impl, exporter_impl, classifier_impl
@@ -76,10 +77,13 @@ def scan():
 
     # Worker thread logic to run the core use case without blocking the SSE connection
     def worker_thread():
+        global LAST_SCAN_RESULTS
         try:
             use_case = ScanDatasetUseCase(scanner_impl, factory_impl, classifier_impl)
             use_case.attach(observer)
             reports = use_case.execute(dataset_path)
+            # Keep the flattened results in memory for the analysis tabs
+            LAST_SCAN_RESULTS = [report.to_flat_dict() for report in reports]
             # Export reports to CSV file
             exporter_impl.export(reports, OUTPUT_CSV_PATH)
         except Exception as e:
@@ -106,6 +110,10 @@ def scan():
                 break
 
     return Response(event_stream(), mimetype='text/event-stream')
+
+@web_bp.route('/api/results')
+def results():
+    return jsonify(LAST_SCAN_RESULTS)
 
 @web_bp.route('/api/download')
 def download():

@@ -19,8 +19,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const consoleOutput = document.getElementById('console-output');
     const scanIndicator = document.getElementById('scan-indicator');
 
+    // Results Analysis elements (histogram & table tabs)
+    const resultsSection = document.getElementById('results-section');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    const histogramModalitySelect = document.getElementById('histogram-modality');
+    const histogramMetricSelect = document.getElementById('histogram-metric');
+    const histogramCanvas = document.getElementById('histogram-chart');
+    const histogramEmptyMsg = document.getElementById('histogram-empty-msg');
+
+    const tableSearchInput = document.getElementById('table-search');
+    const tableModalitySelect = document.getElementById('table-modality');
+    const resultsTable = document.getElementById('results-table');
+    const resultsTableHead = resultsTable.querySelector('thead');
+    const resultsTableBody = resultsTable.querySelector('tbody');
+    const tableEmptyMsg = document.getElementById('table-empty-msg');
+    const tableRowCount = document.getElementById('table-row-count');
+
     let eventSource = null;
-    
+    let allResults = [];
+    let histogramChart = null;
+    let tableSortKey = null;
+    let tableSortDir = 'asc';
+
+    const MODALITY_LABELS = {
+        all: 'All modalities',
+        structured_text: 'Structured Text',
+        image: 'Image',
+        audio: 'Audio',
+        unknown: 'Unknown'
+    };
+
+    // Columns that are metadata, not analyzable metrics
+    const NON_METRIC_COLUMNS = new Set(['file_path', 'file_name', 'extension', 'modality', 'status', 'processed_at']);
+    const TABLE_EXCLUDED_COLUMNS = new Set(['file_path', 'processed_at']);
+    const TABLE_PRIORITY_COLUMNS = ['file_name', 'modality', 'extension', 'status'];
+
     // Modality Counters State
     let counts = {
         structured_text: 0,
@@ -49,8 +84,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btnScan.disabled = true;
         btnDownload.classList.add('disabled');
         btnDownload.setAttribute('tabindex', '-1'); // Disable focus
-        
+
         scanIndicator.classList.add('active');
+
+        // Hide stale analysis results until the new scan finishes
+        resultsSection.hidden = true;
+        if (histogramChart) {
+            histogramChart.destroy();
+            histogramChart = null;
+        }
     }
 
     // Helper: Append a line to the console log
@@ -155,6 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Enable download
                 btnDownload.classList.remove('disabled');
                 btnDownload.removeAttribute('tabindex');
+
+                loadResults();
             }
             
             else if (eventType === 'SCAN_ERROR') {
@@ -203,4 +247,342 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modality === 'audio') return 'audio';
         return 'unknown';
     }
+
+    // ===== Tab switching =====
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabButtons.forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+
+            tabContents.forEach(tc => {
+                tc.hidden = tc.id !== btn.dataset.tab;
+            });
+
+            if (btn.dataset.tab === 'tab-histogram' && histogramChart) {
+                histogramChart.resize();
+            }
+        });
+    });
+
+    // ===== Results Analysis: fetch & populate =====
+    async function loadResults() {
+        try {
+            const response = await fetch('/api/results');
+            const data = await response.json();
+            allResults = Array.isArray(data) ? data : [];
+
+            if (allResults.length === 0) {
+                resultsSection.hidden = true;
+                return;
+            }
+
+            resultsSection.hidden = false;
+            populateModalitySelects();
+            populateMetricSelect();
+            renderHistogram();
+            renderTable();
+        } catch (err) {
+            console.error('Failed to load scan results:', err);
+        }
+    }
+
+    function getAvailableModalities() {
+        return Array.from(new Set(allResults.map(r => r.modality))).sort();
+    }
+
+    function getNumericMetricKeys(rows) {
+        const keys = new Set();
+        rows.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (NON_METRIC_COLUMNS.has(key)) return;
+                if (typeof row[key] === 'number' && !Number.isNaN(row[key])) {
+                    keys.add(key);
+                }
+            });
+        });
+        return Array.from(keys).sort();
+    }
+
+    function getTableColumns(rows) {
+        const keys = new Set();
+        rows.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (!TABLE_EXCLUDED_COLUMNS.has(key)) keys.add(key);
+            });
+        });
+        const rest = Array.from(keys).filter(k => !TABLE_PRIORITY_COLUMNS.includes(k)).sort();
+        return [...TABLE_PRIORITY_COLUMNS.filter(k => keys.has(k)), ...rest];
+    }
+
+    function populateModalitySelects() {
+        const modalities = getAvailableModalities();
+
+        [histogramModalitySelect, tableModalitySelect].forEach(select => {
+            const previousValue = select.value;
+            select.innerHTML = '';
+
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = MODALITY_LABELS.all;
+            select.appendChild(allOption);
+
+            modalities.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = MODALITY_LABELS[m] || m;
+                select.appendChild(opt);
+            });
+
+            if (Array.from(select.options).some(o => o.value === previousValue)) {
+                select.value = previousValue;
+            }
+        });
+    }
+
+    function populateMetricSelect() {
+        const modality = histogramModalitySelect.value;
+        const rows = modality === 'all' ? allResults : allResults.filter(r => r.modality === modality);
+        const metrics = getNumericMetricKeys(rows);
+        const previousValue = histogramMetricSelect.value;
+
+        histogramMetricSelect.innerHTML = '';
+        metrics.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            histogramMetricSelect.appendChild(opt);
+        });
+
+        if (metrics.includes(previousValue)) {
+            histogramMetricSelect.value = previousValue;
+        }
+    }
+
+    histogramModalitySelect.addEventListener('change', () => {
+        populateMetricSelect();
+        renderHistogram();
+    });
+    histogramMetricSelect.addEventListener('change', renderHistogram);
+
+    // ===== Histogram (Chart.js bar chart binning numeric values) =====
+    function formatBinEdge(n) {
+        if (Math.abs(n) >= 100) return n.toFixed(0);
+        if (Math.abs(n) >= 1) return n.toFixed(1);
+        return n.toFixed(3);
+    }
+
+    function computeHistogramBins(values) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+
+        if (min === max) {
+            return { labels: [formatBinEdge(min)], counts: [values.length] };
+        }
+
+        const binCount = Math.max(5, Math.min(20, Math.ceil(Math.sqrt(values.length))));
+        const binWidth = (max - min) / binCount;
+        const bins = new Array(binCount).fill(0);
+
+        values.forEach(v => {
+            let idx = Math.floor((v - min) / binWidth);
+            if (idx >= binCount) idx = binCount - 1;
+            if (idx < 0) idx = 0;
+            bins[idx]++;
+        });
+
+        const labels = bins.map((_, i) => {
+            const start = min + i * binWidth;
+            const end = start + binWidth;
+            return `${formatBinEdge(start)}–${formatBinEdge(end)}`;
+        });
+
+        return { labels, counts: bins };
+    }
+
+    function renderHistogram() {
+        const modality = histogramModalitySelect.value;
+        const metric = histogramMetricSelect.value;
+        const rows = modality === 'all' ? allResults : allResults.filter(r => r.modality === modality);
+        const values = rows
+            .map(r => r[metric])
+            .filter(v => typeof v === 'number' && !Number.isNaN(v));
+
+        if (histogramChart) {
+            histogramChart.destroy();
+            histogramChart = null;
+        }
+
+        if (!metric || values.length === 0) {
+            histogramEmptyMsg.hidden = false;
+            histogramCanvas.hidden = true;
+            return;
+        }
+
+        histogramEmptyMsg.hidden = true;
+        histogramCanvas.hidden = false;
+
+        const { labels, counts } = computeHistogramBins(values);
+        const modalityLabel = modality === 'all' ? '' : ` (${MODALITY_LABELS[modality] || modality})`;
+
+        histogramChart = new Chart(histogramCanvas, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: metric,
+                    data: counts,
+                    backgroundColor: 'rgba(59, 130, 246, 0.65)',
+                    hoverBackgroundColor: 'rgba(96, 165, 250, 0.9)',
+                    borderRadius: 4,
+                    maxBarThickness: 24,
+                    categoryPercentage: 0.9,
+                    barPercentage: 0.9
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: `Distribution of ${metric}${modalityLabel}`,
+                        color: '#f3f4f6',
+                        font: { family: "'Outfit', sans-serif", size: 14, weight: '600' },
+                        padding: { bottom: 16 }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(13, 15, 26, 0.95)',
+                        titleColor: '#f3f4f6',
+                        bodyColor: '#f3f4f6',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        callbacks: {
+                            title: (items) => `Range: ${items[0].label}`,
+                            label: (item) => `Count: ${item.raw}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                        ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 },
+                        title: { display: true, text: metric, color: '#9ca3af' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                        ticks: { color: '#9ca3af', precision: 0 },
+                        title: { display: true, text: 'Frequency', color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+    }
+
+    // ===== Interactive metrics table (filter, search, sort) =====
+    function getFilteredTableRows() {
+        const modality = tableModalitySelect.value;
+        const search = tableSearchInput.value.trim().toLowerCase();
+
+        let rows = modality === 'all' ? allResults.slice() : allResults.filter(r => r.modality === modality);
+
+        if (search) {
+            rows = rows.filter(r => (r.file_name || '').toLowerCase().includes(search));
+        }
+
+        if (tableSortKey) {
+            rows.sort((a, b) => {
+                const va = a[tableSortKey];
+                const vb = b[tableSortKey];
+                let cmp;
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    cmp = va - vb;
+                } else {
+                    cmp = String(va ?? '').localeCompare(String(vb ?? ''));
+                }
+                return tableSortDir === 'asc' ? cmp : -cmp;
+            });
+        }
+
+        return rows;
+    }
+
+    function renderCellContent(column, value) {
+        if (column === 'modality' && value) {
+            const span = document.createElement('span');
+            span.className = `badge-${getBadgeType(value)}`;
+            span.textContent = value;
+            return span;
+        }
+        if (value === undefined || value === null || value === '') {
+            return document.createTextNode('—');
+        }
+        if (Array.isArray(value)) {
+            return document.createTextNode(value.join(', '));
+        }
+        if (typeof value === 'boolean') {
+            return document.createTextNode(value ? 'Yes' : 'No');
+        }
+        if (typeof value === 'number') {
+            return document.createTextNode(Number.isInteger(value) ? String(value) : value.toFixed(3));
+        }
+        return document.createTextNode(String(value));
+    }
+
+    function renderTable() {
+        const rows = getFilteredTableRows();
+        const columns = getTableColumns(rows.length ? rows : allResults);
+
+        // Header
+        const headRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.appendChild(document.createTextNode(col));
+
+            if (col === tableSortKey) {
+                const arrow = document.createElement('span');
+                arrow.className = 'sort-arrow';
+                arrow.textContent = tableSortDir === 'asc' ? '▲' : '▼';
+                th.appendChild(arrow);
+            }
+
+            th.addEventListener('click', () => {
+                if (tableSortKey === col) {
+                    tableSortDir = tableSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    tableSortKey = col;
+                    tableSortDir = 'asc';
+                }
+                renderTable();
+            });
+            headRow.appendChild(th);
+        });
+        resultsTableHead.innerHTML = '';
+        resultsTableHead.appendChild(headRow);
+
+        // Body
+        resultsTableBody.innerHTML = '';
+        rows.forEach(row => {
+            const tr = document.createElement('tr');
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                td.appendChild(renderCellContent(col, row[col]));
+                tr.appendChild(td);
+            });
+            resultsTableBody.appendChild(tr);
+        });
+
+        tableEmptyMsg.hidden = rows.length > 0;
+        resultsTable.hidden = rows.length === 0;
+        tableRowCount.textContent = `${rows.length} of ${allResults.length} files`;
+    }
+
+    tableSearchInput.addEventListener('input', renderTable);
+    tableModalitySelect.addEventListener('change', renderTable);
 });

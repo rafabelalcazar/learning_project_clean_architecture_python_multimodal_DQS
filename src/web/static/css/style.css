@@ -458,6 +458,178 @@ body {
 .badge-audio { background: rgba(255, 183, 3, 0.15); color: var(--color-audio-accent); }
 .badge-unknown { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
 
+/* Results Analysis panel (Histogram & Table tabs) */
+.panel-results {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.results-header h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.25rem;
+}
+
+.tab-btn {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    color: var(--text-main);
+}
+
+.tab-btn.active {
+    background: var(--color-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.35);
+}
+
+.tab-content[hidden] {
+    display: none;
+}
+
+/* Shared filter row (histogram controls + table controls) */
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 180px;
+}
+
+.control-group-grow {
+    flex: 1;
+    min-width: 220px;
+}
+
+.control-group label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.control-group select,
+.control-group input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.control-group select:focus,
+.control-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+}
+
+/* Histogram */
+.chart-wrapper {
+    position: relative;
+    height: 340px;
+}
+
+.empty-msg {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 2rem 0;
+}
+
+/* Interactive metrics table */
+.table-scroll-wrapper {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+#results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+#results-table thead th {
+    position: sticky;
+    top: 0;
+    background: #0d0f1a;
+    color: var(--text-muted);
+    text-align: left;
+    padding: 0.65rem 0.9rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+}
+
+#results-table thead th:hover {
+    color: var(--text-main);
+}
+
+#results-table thead th .sort-arrow {
+    margin-left: 0.35rem;
+    color: var(--color-primary);
+}
+
+#results-table tbody td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-family: monospace;
+}
+
+#results-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.table-row-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: right;
+}
+
 /* Footer */
 .app-footer {
     text-align: center;

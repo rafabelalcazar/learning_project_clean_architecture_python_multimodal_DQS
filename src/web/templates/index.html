@@ -103,6 +103,57 @@
                     <div class="log-line system-msg">[System] Waiting for input path...</div>
                 </div>
             </section>
+
+            <!-- Results Analysis: Histogram & Interactive Table -->
+            <section class="glass-card panel-results" id="results-section" hidden>
+                <div class="results-header">
+                    <h2>Scan Results Analysis</h2>
+                    <div class="tabs" role="tablist">
+                        <button type="button" class="tab-btn active" data-tab="tab-histogram" role="tab" aria-selected="true">📊 Distribution</button>
+                        <button type="button" class="tab-btn" data-tab="tab-table" role="tab" aria-selected="false">📋 Metrics Table</button>
+                    </div>
+                </div>
+
+                <!-- Tab 1: Histogram of numeric metric distribution -->
+                <div class="tab-content active" id="tab-histogram" role="tabpanel">
+                    <div class="filter-row">
+                        <div class="control-group">
+                            <label for="histogram-modality">Modality</label>
+                            <select id="histogram-modality"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="histogram-metric">Metric</label>
+                            <select id="histogram-metric"></select>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="histogram-chart"></canvas>
+                    </div>
+                    <p class="empty-msg" id="histogram-empty-msg" hidden>No numeric values available to plot for this selection.</p>
+                </div>
+
+                <!-- Tab 2: Interactive, filterable metrics table -->
+                <div class="tab-content" id="tab-table" role="tabpanel" hidden>
+                    <div class="filter-row">
+                        <div class="control-group control-group-grow">
+                            <label for="table-search">Search by file name</label>
+                            <input type="text" id="table-search" placeholder="e.g. photo_01.png" autocomplete="off">
+                        </div>
+                        <div class="control-group">
+                            <label for="table-modality">Modality</label>
+                            <select id="table-modality"></select>
+                        </div>
+                    </div>
+                    <div class="table-scroll-wrapper">
+                        <table id="results-table">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <p class="empty-msg" id="table-empty-msg" hidden>No rows match the current filters.</p>
+                    <p class="table-row-count" id="table-row-count"></p>
+                </div>
+            </section>
         </main>
 
         <footer class="app-footer">
@@ -110,6 +161,7 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
