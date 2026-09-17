@@ -111,6 +111,7 @@
                     <div class="tabs" role="tablist">
                         <button type="button" class="tab-btn active" data-tab="tab-histogram" role="tab" aria-selected="true">📊 Distribution</button>
                         <button type="button" class="tab-btn" data-tab="tab-table" role="tab" aria-selected="false">📋 Metrics Table</button>
+                        <button type="button" class="tab-btn" data-tab="tab-thresholds" role="tab" aria-selected="false">🎚️ Thresholds</button>
                     </div>
                 </div>
 
@@ -152,6 +153,18 @@
                     </div>
                     <p class="empty-msg" id="table-empty-msg" hidden>No rows match the current filters.</p>
                     <p class="table-row-count" id="table-row-count"></p>
+                </div>
+
+                <!-- Tab 3: Per-metric quality thresholds -->
+                <div class="tab-content" id="tab-thresholds" role="tabpanel" hidden>
+                    <div class="filter-row">
+                        <div class="control-group">
+                            <label for="thresholds-modality">Modality</label>
+                            <select id="thresholds-modality"></select>
+                        </div>
+                    </div>
+                    <p class="threshold-summary" id="threshold-summary"></p>
+                    <div class="threshold-list" id="threshold-list"></div>
                 </div>
             </section>
         </main>

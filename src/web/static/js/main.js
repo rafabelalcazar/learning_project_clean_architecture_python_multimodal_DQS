@@ -37,11 +37,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const tableEmptyMsg = document.getElementById('table-empty-msg');
     const tableRowCount = document.getElementById('table-row-count');
 
+    const thresholdsModalitySelect = document.getElementById('thresholds-modality');
+    const thresholdSummary = document.getElementById('threshold-summary');
+    const thresholdList = document.getElementById('threshold-list');
+
     let eventSource = null;
     let allResults = [];
     let histogramChart = null;
     let tableSortKey = null;
     let tableSortDir = 'asc';
+    // thresholds[modality][metricKey] = { minEnabled, min, maxEnabled, max, dataMin, dataMax, step }
+    let thresholds = {};
+
+    // Short descriptions used as tooltips in the Thresholds tab
+    const METRIC_DESCRIPTIONS = {
+        width_pixels: 'Image width in pixels.',
+        height_pixels: 'Image height in pixels.',
+        aspect_ratio: 'Width-to-height ratio of the image.',
+        file_size_bytes: 'File size in bytes.',
+        blur_score: 'Variance of the Laplacian on the grayscale image. Low values indicate a blurry or low-detail image.',
+        brightness: 'Mean grayscale intensity (0-255).',
+        contrast: 'Standard deviation of grayscale intensity; higher means more global contrast.',
+        entropy: 'Shannon entropy of the grayscale image; measures visual complexity/information.',
+        r_mean: 'Mean intensity of the Red channel.',
+        g_mean: 'Mean intensity of the Green channel.',
+        b_mean: 'Mean intensity of the Blue channel.',
+        noise_sigma: 'Estimated noise level of the image. Higher values indicate a noisier image.',
+        colorfulness: 'Hasler-Süsstrunk colorfulness score; higher values indicate more vivid/saturated images.',
+        saturation_mean: 'Mean saturation (S channel) in the HSV color space.',
+        overexposed_ratio: 'Proportion of near-white pixels (>= 250); detects overexposure/clipping.',
+        underexposed_ratio: 'Proportion of near-black pixels (<= 5); detects underexposure.',
+        dynamic_range: 'Difference between the maximum and minimum grayscale intensity.',
+        edge_density: 'Proportion of edge pixels (Canny) over total pixels; measures level of detail.',
+        row_count: 'Number of rows in the file (or first sheet, for Excel).',
+        column_count: 'Number of columns.',
+        null_count: 'Total number of null/empty cells.',
+        sheet_count: 'Number of sheets in the Excel workbook.',
+        line_count: 'Number of lines in the text file.',
+        word_count: 'Total number of words.',
+        char_count: 'Total number of characters.',
+        channels: 'Number of audio channels (1 = mono, 2 = stereo).',
+        sample_rate_hz: 'Audio sample rate in Hz.',
+        duration_seconds: 'Total audio duration in seconds.',
+        bit_depth: 'Bits per audio sample.',
+        bitrate_kbps: 'Audio bitrate in kbps.'
+    };
 
     const MODALITY_LABELS = {
         all: 'All modalities',
@@ -93,6 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
             histogramChart.destroy();
             histogramChart = null;
         }
+
+        // Thresholds are report-specific: drop them until the new scan's results arrive
+        thresholds = {};
+        thresholdList.innerHTML = '';
+        thresholdSummary.textContent = '';
     }
 
     // Helper: Append a line to the console log
@@ -285,6 +330,10 @@ document.addEventListener('DOMContentLoaded', () => {
             populateMetricSelect();
             renderHistogram();
             renderTable();
+
+            buildThresholdRanges();
+            renderThresholdsTab();
+            renderThresholdSummary();
         } catch (err) {
             console.error('Failed to load scan results:', err);
         }
@@ -321,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateModalitySelects() {
         const modalities = getAvailableModalities();
 
-        [histogramModalitySelect, tableModalitySelect].forEach(select => {
+        [histogramModalitySelect, tableModalitySelect, thresholdsModalitySelect].forEach(select => {
             const previousValue = select.value;
             select.innerHTML = '';
 
@@ -496,7 +545,17 @@ document.addEventListener('DOMContentLoaded', () => {
             rows = rows.filter(r => (r.file_name || '').toLowerCase().includes(search));
         }
 
-        if (tableSortKey) {
+        if (tableSortKey === 'quality') {
+            const rank = (r) => {
+                const result = evaluateThresholds(r);
+                if (result === null) return 2;
+                return result.pass ? 1 : 0;
+            };
+            rows.sort((a, b) => {
+                const cmp = rank(a) - rank(b);
+                return tableSortDir === 'asc' ? cmp : -cmp;
+            });
+        } else if (tableSortKey) {
             rows.sort((a, b) => {
                 const va = a[tableSortKey];
                 const vb = b[tableSortKey];
@@ -511,6 +570,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return rows;
+    }
+
+    function renderQualityCell(result) {
+        if (result === null) {
+            const span = document.createElement('span');
+            span.className = 'quality-na';
+            span.textContent = '—';
+            return span;
+        }
+        const span = document.createElement('span');
+        if (result.pass) {
+            span.className = 'quality-pass';
+            span.textContent = '✅ Pass';
+        } else {
+            span.className = 'quality-fail';
+            span.textContent = '❌ Fail';
+            span.title = result.violations.join(', ');
+        }
+        return span;
     }
 
     function renderCellContent(column, value) {
@@ -537,13 +615,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTable() {
         const rows = getFilteredTableRows();
-        const columns = getTableColumns(rows.length ? rows : allResults);
+        const dataColumns = getTableColumns(rows.length ? rows : allResults);
+        const fileNameIdx = dataColumns.indexOf('file_name');
+        const columns = fileNameIdx >= 0
+            ? [...dataColumns.slice(0, fileNameIdx + 1), 'quality', ...dataColumns.slice(fileNameIdx + 1)]
+            : ['quality', ...dataColumns];
 
         // Header
         const headRow = document.createElement('tr');
         columns.forEach(col => {
             const th = document.createElement('th');
-            th.appendChild(document.createTextNode(col));
+            th.appendChild(document.createTextNode(col === 'quality' ? 'Quality' : col));
 
             if (col === tableSortKey) {
                 const arrow = document.createElement('span');
@@ -572,7 +654,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             columns.forEach(col => {
                 const td = document.createElement('td');
-                td.appendChild(renderCellContent(col, row[col]));
+                if (col === 'quality') {
+                    td.appendChild(renderQualityCell(evaluateThresholds(row)));
+                } else {
+                    td.appendChild(renderCellContent(col, row[col]));
+                }
                 tr.appendChild(td);
             });
             resultsTableBody.appendChild(tr);
@@ -585,4 +671,236 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tableSearchInput.addEventListener('input', renderTable);
     tableModalitySelect.addEventListener('change', renderTable);
+
+    // ===== Quality thresholds (per metric, per modality) =====
+    function debounce(fn, delay) {
+        let timeoutId;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => fn(...args), delay);
+        };
+    }
+
+    function formatThresholdValue(n) {
+        return Number.isInteger(n) ? String(n) : n.toFixed(3);
+    }
+
+    // Rebuilds the threshold config from scratch using the current report's
+    // real min/max per metric, so ranges always reflect the latest scan.
+    function buildThresholdRanges() {
+        thresholds = {};
+
+        getAvailableModalities().forEach(modality => {
+            const rows = allResults.filter(r => r.modality === modality);
+            const metrics = getNumericMetricKeys(rows);
+            const modalityThresholds = {};
+
+            metrics.forEach(metric => {
+                const values = rows
+                    .map(r => r[metric])
+                    .filter(v => typeof v === 'number' && !Number.isNaN(v));
+                if (values.length === 0) return;
+
+                const dataMin = Math.min(...values);
+                const dataMax = Math.max(...values);
+                const range = dataMax - dataMin;
+                const isIntegerMetric = values.every(v => Number.isInteger(v));
+                const step = isIntegerMetric ? 1 : Math.max(range / 100, 0.001);
+
+                modalityThresholds[metric] = {
+                    minEnabled: false,
+                    maxEnabled: false,
+                    min: dataMin,
+                    max: dataMax,
+                    dataMin,
+                    dataMax,
+                    step
+                };
+            });
+
+            thresholds[modality] = modalityThresholds;
+        });
+    }
+
+    function evaluateThresholds(row) {
+        const cfg = thresholds[row.modality];
+        if (!cfg) return null;
+
+        const active = Object.values(cfg).some(c => c.minEnabled || c.maxEnabled);
+        if (!active) return null;
+
+        const violations = [];
+        Object.entries(cfg).forEach(([metric, bound]) => {
+            const value = row[metric];
+            if (typeof value !== 'number') return;
+            if (bound.minEnabled && value < bound.min) {
+                violations.push(`${metric} < ${formatThresholdValue(bound.min)}`);
+            }
+            if (bound.maxEnabled && value > bound.max) {
+                violations.push(`${metric} > ${formatThresholdValue(bound.max)}`);
+            }
+        });
+
+        return { pass: violations.length === 0, violations };
+    }
+
+    function renderThresholdSummary() {
+        const modality = thresholdsModalitySelect.value;
+        if (!modality) {
+            thresholdSummary.textContent = '';
+            return;
+        }
+
+        const rows = allResults.filter(r => r.modality === modality);
+        const modalityThresholds = thresholds[modality] || {};
+        const anyEnabled = Object.values(modalityThresholds).some(c => c.minEnabled || c.maxEnabled);
+
+        if (!anyEnabled) {
+            thresholdSummary.textContent = `No active thresholds for ${MODALITY_LABELS[modality] || modality} yet — enable Min/Max below to start evaluating quality.`;
+            return;
+        }
+
+        const passCount = rows.filter(r => {
+            const result = evaluateThresholds(r);
+            return result === null || result.pass;
+        }).length;
+
+        thresholdSummary.textContent = `${passCount} of ${rows.length} ${MODALITY_LABELS[modality] || modality} files pass all configured thresholds.`;
+    }
+
+    function buildBoundControl(cfg, bound, labelText) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'threshold-bound';
+
+        const label = document.createElement('label');
+        label.className = 'threshold-bound-label';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = bound === 'min' ? cfg.minEnabled : cfg.maxEnabled;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(labelText));
+        wrapper.appendChild(label);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.className = 'threshold-slider';
+        slider.min = cfg.dataMin;
+        slider.max = cfg.dataMax;
+        slider.step = cfg.step;
+        slider.value = bound === 'min' ? cfg.min : cfg.max;
+        slider.disabled = !checkbox.checked;
+        wrapper.appendChild(slider);
+
+        const number = document.createElement('input');
+        number.type = 'number';
+        number.className = 'threshold-number';
+        number.min = cfg.dataMin;
+        number.max = cfg.dataMax;
+        number.step = cfg.step;
+        number.value = slider.value;
+        number.disabled = !checkbox.checked;
+        wrapper.appendChild(number);
+
+        const applyValue = (rawValue) => {
+            let value = parseFloat(rawValue);
+            if (Number.isNaN(value)) value = bound === 'min' ? cfg.dataMin : cfg.dataMax;
+            value = Math.min(Math.max(value, cfg.dataMin), cfg.dataMax);
+
+            if (bound === 'min') {
+                cfg.min = value;
+            } else {
+                cfg.max = value;
+            }
+            slider.value = value;
+            number.value = value;
+        };
+
+        const debouncedRefresh = debounce(() => {
+            renderThresholdSummary();
+            renderTable();
+        }, 120);
+
+        checkbox.addEventListener('change', () => {
+            if (bound === 'min') {
+                cfg.minEnabled = checkbox.checked;
+            } else {
+                cfg.maxEnabled = checkbox.checked;
+            }
+            slider.disabled = !checkbox.checked;
+            number.disabled = !checkbox.checked;
+            renderThresholdSummary();
+            renderTable();
+        });
+
+        slider.addEventListener('input', () => {
+            applyValue(slider.value);
+            debouncedRefresh();
+        });
+
+        number.addEventListener('change', () => {
+            applyValue(number.value);
+            renderThresholdSummary();
+            renderTable();
+        });
+
+        return wrapper;
+    }
+
+    function buildThresholdRow(metric, cfg) {
+        const row = document.createElement('div');
+        row.className = 'threshold-row';
+
+        const header = document.createElement('div');
+        header.className = 'threshold-row-header';
+
+        const name = document.createElement('span');
+        name.className = 'threshold-metric-name';
+        name.textContent = metric;
+        header.appendChild(name);
+
+        const info = document.createElement('span');
+        info.className = 'info-icon';
+        info.tabIndex = 0;
+        info.textContent = 'i';
+        const description = METRIC_DESCRIPTIONS[metric] || 'No description available for this metric.';
+        info.setAttribute('data-tooltip', `${description} Enable Min and/or Max below to flag files outside your accepted range.`);
+        header.appendChild(info);
+
+        row.appendChild(header);
+        row.appendChild(buildBoundControl(cfg, 'min', 'Min'));
+        row.appendChild(buildBoundControl(cfg, 'max', 'Max'));
+
+        const hint = document.createElement('span');
+        hint.className = 'threshold-range-hint';
+        hint.textContent = `Observed range: ${formatThresholdValue(cfg.dataMin)} – ${formatThresholdValue(cfg.dataMax)}`;
+        row.appendChild(hint);
+
+        return row;
+    }
+
+    function renderThresholdsTab() {
+        const modality = thresholdsModalitySelect.value;
+        const modalityThresholds = thresholds[modality] || {};
+        const metrics = Object.keys(modalityThresholds).sort();
+
+        thresholdList.innerHTML = '';
+
+        if (metrics.length === 0) {
+            const msg = document.createElement('p');
+            msg.className = 'empty-msg';
+            msg.textContent = 'No numeric metrics available for this modality.';
+            thresholdList.appendChild(msg);
+            return;
+        }
+
+        metrics.forEach(metric => {
+            thresholdList.appendChild(buildThresholdRow(metric, modalityThresholds[metric]));
+        });
+    }
+
+    thresholdsModalitySelect.addEventListener('change', () => {
+        renderThresholdsTab();
+        renderThresholdSummary();
+    });
 });

@@ -630,6 +630,144 @@ body {
     text-align: right;
 }
 
+/* Quality column badges (thresholds pass/fail) */
+.quality-pass { color: var(--color-success); font-weight: 600; }
+.quality-fail { color: var(--color-error); font-weight: 600; cursor: help; }
+.quality-na { color: var(--text-muted); }
+
+/* Thresholds tab */
+.threshold-summary {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-main);
+}
+
+.threshold-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.threshold-row {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.threshold-row-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.threshold-metric-name {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Info icon with pure-CSS tooltip, keyboard accessible */
+.info-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: help;
+}
+
+.info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 130%;
+    left: 0;
+    width: max-content;
+    max-width: 280px;
+    background: #0d0f1a;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: normal;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.info-icon:hover::after,
+.info-icon:focus::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.threshold-bound {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.threshold-bound-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    min-width: 50px;
+}
+
+.threshold-slider {
+    flex: 1;
+    min-width: 120px;
+    accent-color: var(--color-primary);
+}
+
+.threshold-slider:disabled,
+.threshold-number:disabled {
+    opacity: 0.4;
+}
+
+.threshold-number {
+    width: 90px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    color: var(--text-main);
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.threshold-range-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
 /* Footer */
 .app-footer {
     text-align: center;
