@@ -93,6 +93,32 @@ class TestProcessorFactoryAndStrategies(unittest.TestCase):
         self.assertEqual(metrics.get("b_mean"), 255.0)
         self.assertGreater(metrics.get("brightness"), 0.0)
 
+        # New quality metrics on a solid-color image
+        self.assertFalse(metrics.get("is_corrupted"))
+        self.assertEqual(metrics.get("dynamic_range"), 0)
+        self.assertEqual(metrics.get("edge_density"), 0.0)
+        self.assertEqual(metrics.get("overexposed_ratio"), 0.0)
+        self.assertEqual(metrics.get("underexposed_ratio"), 0.0)
+        self.assertGreater(metrics.get("colorfulness"), 0.0)
+        self.assertGreater(metrics.get("saturation_mean"), 0.0)
+        self.assertGreaterEqual(metrics.get("noise_sigma"), 0.0)
+
+    def test_image_strategy_corrupted_file(self):
+        # Generate a valid PNG, then truncate it to simulate a corrupted file
+        img_path = os.path.join(self.temp_dir.name, "corrupted.png")
+        img = Image.new("RGB", (50, 50), color="red")
+        img.save(img_path)
+
+        with open(img_path, "rb") as f:
+            data = f.read()
+        with open(img_path, "wb") as f:
+            f.write(data[:len(data) // 2])
+
+        strategy = ImageQualityStrategy()
+        metrics = strategy.extract_metrics(img_path)
+
+        self.assertTrue(metrics.get("is_corrupted"))
+
     def test_audio_strategy_wav(self):
         # Generate temporary WAV file
         wav_path = os.path.join(self.temp_dir.name, "test.wav")

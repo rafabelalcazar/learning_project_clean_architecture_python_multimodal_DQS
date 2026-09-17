@@ -5,3 +5,4 @@ mutagen>=1.46.0
 Flask>=3.0.0
 opencv-python>=4.9.0
 scikit-image>=0.22.0
+PyWavelets>=1.4.0
