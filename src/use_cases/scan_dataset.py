@@ -1,14 +1,15 @@
 import os
 from typing import List
 from src.domain.entities import FileItem, QualityReport, Modality
-from src.domain.interfaces import Subject, FileScanner
+from src.domain.interfaces import Subject, FileScanner, ModalityClassifier
 from src.use_cases.factory import AbstractProcessorFactory
 
 class ScanDatasetUseCase(Subject):
-    def __init__(self, scanner: FileScanner, processor_factory: AbstractProcessorFactory):
+    def __init__(self, scanner: FileScanner, processor_factory: AbstractProcessorFactory, classifier: ModalityClassifier):
         super().__init__()
         self._scanner = scanner
         self._processor_factory = processor_factory
+        self._classifier = classifier
 
     def execute(self, directory_path: str) -> List[QualityReport]:
         # 1. Scan directory for all file paths
@@ -45,14 +46,17 @@ class ScanDatasetUseCase(Subject):
         _, ext = os.path.splitext(name)
         ext = ext.lower()
 
+        # Usamos el servicio externo
+        modality = self._classifier.classify(path)
+
         # Identify modality based on file extension
-        if ext in [".csv", ".txt", ".xlsx"]:
-            modality = Modality.STRUCTURED_TEXT
-        elif ext in [".jpg", ".jpeg", ".png"]:
-            modality = Modality.IMAGE
-        elif ext in [".mp3", ".wav", ".mo3"]:
-            modality = Modality.AUDIO
-        else:
-            modality = Modality.UNKNOWN
+        # if ext in [".csv", ".txt", ".xlsx"]:
+        #     modality = Modality.STRUCTURED_TEXT
+        # elif ext in [".jpg", ".jpeg", ".png"]:
+        #     modality = Modality.IMAGE
+        # elif ext in [".mp3", ".wav", ".mo3"]:
+        #     modality = Modality.AUDIO
+        # else:
+        #     modality = Modality.UNKNOWN
 
         return FileItem(path=path, name=name, extension=ext, modality=modality)

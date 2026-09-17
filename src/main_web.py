@@ -1,6 +1,7 @@
 from flask import Flask
 from src.infrastructure.scanner import OsFileScanner
 from src.infrastructure.processors.factory_impl import ProcessorFactory
+from src.infrastructure.classifiers.extension_classifier import OsExtensionClassifier
 from src.adapters.exporters import CsvMetricsExporter
 from src.adapters.web_controller import web_bp, init_app_dependencies
 
@@ -16,8 +17,9 @@ def create_app() -> Flask:
     scanner = OsFileScanner()
     factory = ProcessorFactory()
     exporter = CsvMetricsExporter()
+    classifier = OsExtensionClassifier()
 
-    init_app_dependencies(scanner, factory, exporter)
+    init_app_dependencies(scanner, factory, exporter, classifier)
 
     # Register routes blueprint
     app.register_blueprint(web_bp)

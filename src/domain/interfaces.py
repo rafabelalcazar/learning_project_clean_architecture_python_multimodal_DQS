@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-from src.domain.entities import FileItem, QualityReport
+from src.domain.entities import FileItem, QualityReport, Modality
 
 class Observer(ABC):
     @abstractmethod
@@ -41,4 +41,9 @@ class UnimodalProcessor(ABC):
 class MetricsExporter(ABC):
     @abstractmethod
     def export(self, reports: List[QualityReport], output_path: str) -> None:
+        pass
+
+class ModalityClassifier(ABC):
+    @abstractmethod
+    def classify(self, file_path: str) -> Modality:
         pass

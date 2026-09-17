@@ -3,7 +3,7 @@ import os
 import queue
 import threading
 from flask import Blueprint, Response, request, render_template, send_file
-from src.domain.interfaces import FileScanner, MetricsExporter
+from src.domain.interfaces import FileScanner, MetricsExporter, ModalityClassifier
 from src.use_cases.scan_dataset import ScanDatasetUseCase
 from src.use_cases.factory import AbstractProcessorFactory
 from src.adapters.observers import QueueProgressObserver
@@ -19,13 +19,15 @@ web_bp = Blueprint(
 scanner_impl = None
 factory_impl = None
 exporter_impl = None
+classifier_impl = None
 OUTPUT_CSV_PATH = "scan_results.csv"
 
-def init_app_dependencies(scanner: FileScanner, factory: AbstractProcessorFactory, exporter: MetricsExporter) -> None:
-    global scanner_impl, factory_impl, exporter_impl
+def init_app_dependencies(scanner: FileScanner, factory: AbstractProcessorFactory, exporter: MetricsExporter, classifier: ModalityClassifier) -> None:
+    global scanner_impl, factory_impl, exporter_impl, classifier_impl
     scanner_impl = scanner
     factory_impl = factory
     exporter_impl = exporter
+    classifier_impl = classifier
 
 @web_bp.route('/')
 def index():
@@ -59,7 +61,7 @@ def scan():
     # Worker thread logic to run the core use case without blocking the SSE connection
     def worker_thread():
         try:
-            use_case = ScanDatasetUseCase(scanner_impl, factory_impl)
+            use_case = ScanDatasetUseCase(scanner_impl, factory_impl, classifier_impl)
             use_case.attach(observer)
             reports = use_case.execute(dataset_path)
             # Export reports to CSV file
