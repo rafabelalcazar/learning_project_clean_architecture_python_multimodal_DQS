@@ -141,3 +141,32 @@ class TestProcessorFactoryAndStrategies(unittest.TestCase):
         self.assertEqual(metrics.get("duration_seconds"), 0.5)
         self.assertEqual(metrics.get("bit_depth"), 16)
         self.assertEqual(metrics.get("audio_format"), "WAV")
+
+        # A pure-silence WAV should read as flat/silent on every waveform metric
+        self.assertFalse(metrics.get("is_corrupted"))
+        self.assertEqual(metrics.get("rms_energy"), 0.0)
+        self.assertEqual(metrics.get("peak_amplitude"), 0.0)
+        self.assertEqual(metrics.get("clipping_ratio"), 0.0)
+        self.assertEqual(metrics.get("silence_ratio"), 1.0)
+
+    def test_audio_strategy_corrupted_file(self):
+        # ffmpeg tolerates a WAV truncated mid-data (it just decodes fewer
+        # samples), so cut into the header itself to force a real decode failure.
+        wav_path = os.path.join(self.temp_dir.name, "corrupted.wav")
+        with wave.open(wav_path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            num_frames = int(44100 * 0.5)
+            for _ in range(num_frames):
+                w.writeframesraw(struct.pack("<h", 0))
+
+        with open(wav_path, "rb") as f:
+            data = f.read()
+        with open(wav_path, "wb") as f:
+            f.write(data[:20])
+
+        strategy = AudioQualityStrategy()
+        metrics = strategy.extract_metrics(wav_path)
+
+        self.assertTrue(metrics.get("is_corrupted"))

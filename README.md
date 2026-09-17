@@ -16,6 +16,7 @@ Las dependencias principales se encuentran especificadas en [requirements.txt](r
 *   **pandas** y **openpyxl**: Para análisis de datos estructurados e importaciones/exportaciones de CSV y Excel.
 *   **Pillow**: Para la lectura y evaluación de propiedades de archivos de imagen (resolución, canales, formato).
 *   **mutagen**: Para la extracción de metadatos y duraciones de pistas de audio.
+*   **pydub**: Para decodificar audio (WAV, MP3, etc.) a muestras PCM y calcular métricas de calidad de la señal. Requiere **ffmpeg** instalado por separado en el sistema (no viene con `pip`).
 *   **Flask**: Para alojar el servidor local del dashboard web.
 
 ---
@@ -181,7 +182,7 @@ Calculadas en [`StructuredTextQualityStrategy`](src/infrastructure/processors/st
 
 ### 🎵 Audio
 
-Calculadas en [`AudioQualityStrategy`](src/infrastructure/processors/audio.py) usando el módulo estándar `wave` (WAV) y `mutagen` (MP3 y otros formatos).
+**Metadatos del archivo** — calculados en [`AudioQualityStrategy`](src/infrastructure/processors/audio.py) usando el módulo estándar `wave` (WAV) y `mutagen` (MP3 y otros formatos).
 
 | Métrica | Aplica a | Descripción |
 |---|---|---|
@@ -191,6 +192,24 @@ Calculadas en [`AudioQualityStrategy`](src/infrastructure/processors/audio.py) u
 | `bit_depth` | WAV | Profundidad de bits por muestra. |
 | `bitrate_kbps` | MP3 | Tasa de bits del archivo en kbps. |
 | `audio_format` | WAV, MP3, otros | Formato de audio detectado (ej. `WAV`, `MP3`). |
+
+**Métricas de calidad de la señal** — calculadas sobre las muestras PCM decodificadas con `pydub` (que a su vez delega la decodificación a **ffmpeg**), aplican por igual a WAV, MP3 y cualquier otro formato soportado por ffmpeg.
+
+| Métrica | Descripción |
+|---|---|
+| `is_corrupted` | `True` si el archivo no se pudo decodificar a muestras de audio; `False` en caso contrario. |
+| `rms_energy` | Energía RMS de la señal normalizada (0-1); volumen/loudness promedio. |
+| `peak_amplitude` | Amplitud máxima absoluta (0-1); valores cercanos a 1 indican riesgo de clipping. |
+| `clipping_ratio` | Proporción de muestras que tocan el límite de amplitud (`>= 0.99`); detecta distorsión digital por clipping. |
+| `silence_ratio` | Proporción de muestras casi silenciosas (`< 0.01`); detecta grabaciones truncadas o con silencio excesivo. |
+| `dynamic_range_db` | Diferencia en dB entre el pico y el RMS (`20*log10(peak/rms)`); rango dinámico real usado por la grabación. |
+| `zero_crossing_rate` | Proporción de cambios de signo de la onda; indicador barato de ruido/contenido tonal vs. percusivo. |
+| `spectral_centroid_hz` | "Brillo" espectral: frecuencia promedio ponderada por magnitud del espectro (FFT). |
+
+> Si la decodificación falla, las métricas de señal se reportan en `0`/`0.0` y se agrega la clave `waveform_metrics_error` con el detalle del error.
+
+> [!IMPORTANT]
+> `pydub` delega la decodificación a **ffmpeg**, un binario del sistema operativo que **no se instala con `pip install -r requirements.txt`**. Debes tenerlo instalado por separado y disponible en el `PATH` (por ejemplo `winget install ffmpeg` en Windows, o `apt install ffmpeg` / `brew install ffmpeg`).
 
 ---
 

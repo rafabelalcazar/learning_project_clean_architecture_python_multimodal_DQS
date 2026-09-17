@@ -6,3 +6,11 @@ Flask>=3.0.0
 opencv-python>=4.9.0
 scikit-image>=0.22.0
 PyWavelets>=1.4.0
+numpy>=1.26.0
+pydub>=0.25.1
+audioop-lts>=0.2.1; python_version >= "3.13"
+
+# NOTE: pydub (above) decodes audio via ffmpeg, a system binary NOT installable
+# via pip. Install it separately and ensure it is on PATH:
+#   Windows: winget install ffmpeg   |   Debian/Ubuntu: apt install ffmpeg   |   macOS: brew install ffmpeg
+# See README.md for details.
