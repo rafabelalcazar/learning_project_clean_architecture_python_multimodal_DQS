@@ -1,4 +1,0 @@
-id,name,score,is_active
-1,Alice,95.5,True
-2,Bob,,False
-3,Charlie,88.0,True
