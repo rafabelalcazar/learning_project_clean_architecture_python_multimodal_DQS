@@ -83,6 +83,16 @@ class TestProcessorFactoryAndStrategies(unittest.TestCase):
         self.assertEqual(metrics.get("color_mode"), "RGB")
         self.assertEqual(metrics.get("image_format"), "PNG")
 
+        # A solid-color image has no edges/variation, so blur, contrast and entropy are 0
+        self.assertEqual(metrics.get("blur_score"), 0.0)
+        self.assertEqual(metrics.get("contrast"), 0.0)
+        self.assertEqual(metrics.get("entropy"), 0.0)
+        # PIL "blue" == RGB(0, 0, 255)
+        self.assertEqual(metrics.get("r_mean"), 0.0)
+        self.assertEqual(metrics.get("g_mean"), 0.0)
+        self.assertEqual(metrics.get("b_mean"), 255.0)
+        self.assertGreater(metrics.get("brightness"), 0.0)
+
     def test_audio_strategy_wav(self):
         # Generate temporary WAV file
         wav_path = os.path.join(self.temp_dir.name, "test.wav")
