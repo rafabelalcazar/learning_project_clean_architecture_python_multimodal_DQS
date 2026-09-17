@@ -123,6 +123,77 @@ Ejecuta la interfaz web interactiva para visualizar las métricas y el progreso 
 
 ---
 
+## 📊 Métricas de Calidad Evaluadas
+
+El reporte generado (CSV) incluye, para cada archivo, un conjunto de métricas específico según su modalidad. Todas las modalidades comparten además `file_size_bytes` (tamaño del archivo en bytes), agregado de forma transversal por [`BaseUnimodalProcessor`](src/infrastructure/processors/base.py).
+
+Esta sección se organiza por modalidad y se irá ampliando a medida que se agreguen nuevas métricas a Texto Estructurado y Audio.
+
+### 🖼️ Imagen
+
+Calculadas en [`ImageQualityStrategy`](src/infrastructure/processors/image.py) usando `Pillow`, `OpenCV` (`cv2`) y `scikit-image`.
+
+**Metadatos del archivo**
+
+| Métrica | Descripción |
+|---|---|
+| `width_pixels` | Ancho de la imagen en píxeles. |
+| `height_pixels` | Alto de la imagen en píxeles. |
+| `aspect_ratio` | Relación de aspecto (`width / height`). |
+| `image_format` | Formato detectado por Pillow (ej. `PNG`, `JPEG`). |
+| `color_mode` | Modo de color de la imagen (ej. `RGB`, `RGBA`, `L`). |
+| `is_corrupted` | `True` si el archivo está truncado o corrupto (verificado con `Image.verify()`); `False` si se puede leer correctamente. |
+
+**Métricas de calidad visual**
+
+| Métrica | Descripción |
+|---|---|
+| `blur_score` | Varianza del Laplaciano sobre la imagen en escala de grises. Valores bajos indican imágenes borrosas o con poco detalle. |
+| `brightness` | Media de intensidad en escala de grises (0-255). |
+| `contrast` | Desviación estándar de intensidad en escala de grises; a mayor valor, mayor contraste global. |
+| `entropy` | Entropía de Shannon de la imagen en escala de grises; mide la complejidad/información visual. |
+| `r_mean`, `g_mean`, `b_mean` | Media de intensidad de cada canal de color (Rojo, Verde, Azul). |
+| `noise_sigma` | Estimación del nivel de ruido de la imagen (`skimage.restoration.estimate_sigma`) sobre la escala de grises. |
+| `colorfulness` | Métrica de "colorido" de Hasler–Süsstrunk; valores altos indican imágenes más vívidas/saturadas. |
+| `saturation_mean` | Media del canal de saturación (S) en el espacio de color HSV. |
+| `overexposed_ratio` | Proporción de píxeles casi blancos (`>= 250` en escala de grises); detecta sobreexposición/clipping. |
+| `underexposed_ratio` | Proporción de píxeles casi negros (`<= 5` en escala de grises); detecta subexposición. |
+| `dynamic_range` | Diferencia entre el valor máximo y mínimo de intensidad en escala de grises. |
+| `edge_density` | Proporción de píxeles de borde (detectados con el algoritmo de Canny) sobre el total de píxeles; mide el nivel de detalle. |
+
+> Si la extracción de estas métricas falla (archivo ilegible, formato no soportado por OpenCV, etc.), se reportan en `0`/`0.0` y se agrega la clave `quality_metrics_error` con el detalle del error.
+
+### 📄 Texto Estructurado
+
+Calculadas en [`StructuredTextQualityStrategy`](src/infrastructure/processors/structured_text.py) usando `pandas`.
+
+| Métrica | Aplica a | Descripción |
+|---|---|---|
+| `row_count` | CSV, XLSX | Número de filas del archivo (o de la primera hoja, en Excel). |
+| `column_count` | CSV, XLSX | Número de columnas. |
+| `null_count` | CSV, XLSX | Total de celdas nulas/vacías en el archivo. |
+| `columns` | CSV, XLSX | Lista con los nombres de las columnas. |
+| `sheet_count` | XLSX | Número de hojas en el libro de Excel. |
+| `sheet_names` | XLSX | Lista con los nombres de las hojas. |
+| `line_count` | TXT | Número de líneas del archivo. |
+| `word_count` | TXT | Número total de palabras. |
+| `char_count` | TXT | Número total de caracteres. |
+
+### 🎵 Audio
+
+Calculadas en [`AudioQualityStrategy`](src/infrastructure/processors/audio.py) usando el módulo estándar `wave` (WAV) y `mutagen` (MP3 y otros formatos).
+
+| Métrica | Aplica a | Descripción |
+|---|---|---|
+| `channels` | WAV, MP3, otros | Número de canales de audio (1 = mono, 2 = estéreo). |
+| `sample_rate_hz` | WAV, MP3, otros | Frecuencia de muestreo en Hz. |
+| `duration_seconds` | WAV, MP3, otros | Duración total del audio en segundos. |
+| `bit_depth` | WAV | Profundidad de bits por muestra. |
+| `bitrate_kbps` | MP3 | Tasa de bits del archivo en kbps. |
+| `audio_format` | WAV, MP3, otros | Formato de audio detectado (ej. `WAV`, `MP3`). |
+
+---
+
 ## 🧪 Ejecución de Pruebas Unitarias
 
 El proyecto cuenta con cobertura de pruebas automatizadas mediante el framework estándar `unittest`.
